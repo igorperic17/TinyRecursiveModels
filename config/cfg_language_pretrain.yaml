@@ -1,0 +1,41 @@
+# Language generation training config
+
+defaults:
+  - arch: trm_language
+  - _self_
+
+hydra:
+  output_subdir: null
+
+# Data path
+data_paths: ['data/language-minimal']
+data_paths_test: []
+
+evaluators: []  # No evaluators for now - focus on training
+
+# Hyperparams - Training
+global_batch_size: 32  # Smaller batch for quick iteration
+
+epochs: 1000  # Fewer epochs for quick iteration
+eval_interval: 100
+checkpoint_every_eval: True
+
+lr: 1e-4
+lr_min_ratio: 0.1
+lr_warmup_steps: 100
+
+# Standard hyperparameter settings for LM
+beta1: 0.9
+beta2: 0.95
+weight_decay: 0.1
+
+# No puzzle embeddings for language generation
+puzzle_emb_lr: 1e-4
+puzzle_emb_weight_decay: 0.1
+
+seed: 0
+min_eval_interval: 0
+
+ema: False  # Start without EMA for simplicity
+ema_rate: 0.999
+freeze_weights: False

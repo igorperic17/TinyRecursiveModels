@@ -1,5 +1,7 @@
+# macOS-specific requirements for TinyRecursiveModels
+# This replaces triton with MLX dependencies
+
 torch
-adam-atan2
 einops
 tqdm
 coolname
@@ -15,8 +17,8 @@ wheel
 setuptools 
 setuptools-scm
 pydantic-core
-huggingface_hub 
 numba
+
 # MLX dependencies for macOS (replaces triton)
 mlx
 mlx-lm
@@ -24,3 +26,6 @@ transformers
 tokenizers
 safetensors
 regex
+
+# Note: adam-atan2 is replaced with adam_atan2_macos.py (included in repo)
+# This avoids CUDA dependency issues on macOS

@@ -1,0 +1,24 @@
+name: recursive_reasoning.trm_language@TinyRecursiveLanguageModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.1
+halt_max_steps: 8  # Shorter for language generation
+
+H_cycles: 2  # Fewer cycles for language
+L_cycles: 3
+
+H_layers: 0
+L_layers: 2
+
+hidden_size: 256  # Smaller for quick iteration
+num_heads: 4
+expansion: 4
+
+pos_encodings: rope
+forward_dtype: bfloat16
+
+mlp_t: False
+causal: True  # Causal attention for language generation
+no_ACT_continue: True
