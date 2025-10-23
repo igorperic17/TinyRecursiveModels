@@ -52,7 +52,7 @@ class TinyRecursiveLanguageModel_ACTV1Config(BaseModel):
     halt_max_steps: int
     halt_exploration_prob: float
 
-    forward_dtype: str = "bfloat16"
+    forward_dtype: str = "float32"
 
     # Language generation specific
     mlp_t: bool = False # use mlp on L instead of transformer
@@ -161,15 +161,28 @@ class TinyRecursiveLanguageModel_ACTV1_Inner(nn.Module):
         return self.embed_scale * embedding
 
     def empty_carry(self, batch_size: int):
+        # Create tensors on the same device as the model
+        device = next(self.parameters()).device
         return TinyRecursiveLanguageModel_ACTV1InnerCarry(
-            z_H=torch.empty(batch_size, self.config.seq_len, self.config.hidden_size, dtype=self.forward_dtype),
-            z_L=torch.empty(batch_size, self.config.seq_len, self.config.hidden_size, dtype=self.forward_dtype),
+            z_H=torch.empty(batch_size, self.config.seq_len, self.config.hidden_size, dtype=self.forward_dtype, device=device),
+            z_L=torch.empty(batch_size, self.config.seq_len, self.config.hidden_size, dtype=self.forward_dtype, device=device),
         )
         
     def reset_carry(self, reset_flag: torch.Tensor, carry: TinyRecursiveLanguageModel_ACTV1InnerCarry):
+        # Ensure all tensors are on the same device
+        device = reset_flag.device
+        
+        # Move initial states to the correct device
+        H_init = self.H_init.to(device)
+        L_init = self.L_init.to(device)
+        
+        # Ensure carry tensors are on the correct device
+        z_H = carry.z_H.to(device)
+        z_L = carry.z_L.to(device)
+        
         return TinyRecursiveLanguageModel_ACTV1InnerCarry(
-            z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
-            z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
+            z_H=torch.where(reset_flag.view(-1, 1, 1), H_init, z_H),
+            z_L=torch.where(reset_flag.view(-1, 1, 1), L_init, z_L),
         )
 
     def forward(self, carry: TinyRecursiveLanguageModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveLanguageModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
@@ -179,6 +192,21 @@ class TinyRecursiveLanguageModel_ACTV1_Inner(nn.Module):
 
         # Input encoding
         input_embeddings = self._input_embeddings(batch["inputs"])
+        
+        # Ensure input embeddings match the expected sequence length
+        if input_embeddings.shape[1] != self.config.seq_len:
+            # Pad or truncate to match expected sequence length
+            if input_embeddings.shape[1] < self.config.seq_len:
+                # Pad with zeros
+                pad_size = self.config.seq_len - input_embeddings.shape[1]
+                input_embeddings = torch.cat([
+                    input_embeddings, 
+                    torch.zeros(input_embeddings.shape[0], pad_size, input_embeddings.shape[2], 
+                              device=input_embeddings.device, dtype=input_embeddings.dtype)
+                ], dim=1)
+            else:
+                # Truncate
+                input_embeddings = input_embeddings[:, :self.config.seq_len]
 
         # Forward iterations
         it = 0
@@ -211,12 +239,13 @@ class TinyRecursiveLanguageModel_ACTV1(nn.Module):
 
     def initial_carry(self, batch: Dict[str, torch.Tensor]):
         batch_size = batch["inputs"].shape[0]
+        device = batch["inputs"].device
 
         return TinyRecursiveLanguageModel_ACTV1Carry(
             inner_carry=self.inner.empty_carry(batch_size),  # Empty is expected, it will be reseted in first pass as all sequences are halted.
             
-            steps=torch.zeros((batch_size, ), dtype=torch.int32),
-            halted=torch.ones((batch_size, ), dtype=torch.bool),  # Default to halted
+            steps=torch.zeros((batch_size, ), dtype=torch.int32, device=device),
+            halted=torch.ones((batch_size, ), dtype=torch.bool, device=device),  # Default to halted
             
             current_data={k: torch.empty_like(v) for k, v in batch.items()}
         )
